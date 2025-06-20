@@ -7,6 +7,8 @@ on:
     - cron: '24 1 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
 
 jobs:
   generate-lists:
@@ -16,8 +18,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal token
-        fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
+        fetch-depth: 0
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
@@ -31,16 +32,19 @@ jobs:
       run: |
         mkdir data
         python3 generate-address-list.py XBT ETH XMR LTC ZEC DASH BTG ETC BSV BCH XVG USDC USDT XRP TRX ARB BSC -f JSON TXT -path ./data -sdn SDN_ADVANCED.XML
-    - name: Commit files
+    - name: Create and switch to lists branch
       run: |
         git config --local user.email "45324+github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
+        git fetch origin lists:lists || git checkout -b lists
         git checkout lists
-        mv data/* .
+    - name: Update files and commit
+      run: |
+        cp data/* .
         git add sanctioned_addresses_* -f
-        git commit -m "Automatically updated lists: $(date)" -a || true
-    - name: Push changes
-      uses: ad-m/github-push-action@master
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: lists
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Automatically updated lists: $(date)"
+          git push origin lists
+        fi
